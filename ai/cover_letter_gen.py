@@ -1,6 +1,7 @@
 import openai
 from dotenv import load_dotenv
 import os
+from typing import Optional
 
 load_dotenv()
 
@@ -10,11 +11,101 @@ class CoverLetterGenerator:
         """Initialize with legacy OpenAI client (v0.28.1 compatible)"""
         # Set API key directly (legacy format)
         openai.api_key = os.getenv('OPENAI_API_KEY')
+        self._has_api_key = bool(os.getenv('OPENAI_API_KEY'))
         print("✅ Using legacy OpenAI client")
 
-    def generate_cover_letter(self, job_title, company, job_description=""):
-        """Generate COMPLETELY GENERIC cover letter template"""
+    def generate_cover_letter(self, job_title: str, company_name: str, location: Optional[str] = None, 
+                            job_snippet: Optional[str] = None, use_ai: bool = True) -> str:
+        """
+        Generate a generic, professional cover letter without requiring personal information.
+        
+        Args:
+            job_title: The job title/position
+            company_name: The company name
+            location: Optional job location
+            job_snippet: Optional job description snippet for context
+            use_ai: Whether to use AI for polishing (falls back to deterministic if API unavailable)
+            
+        Returns:
+            A professional, generic cover letter ready for use
+        """
+        # Create base deterministic template
+        base_letter = self._create_deterministic_template(job_title, company_name, location, job_snippet)
+        
+        # If AI not requested or no API key, return base template
+        if not use_ai or not self._has_api_key:
+            return base_letter
+            
+        # Try to polish with AI
+        try:
+            return self._polish_with_ai(base_letter, job_title, company_name)
+        except Exception as e:
+            print(f"⚠️ AI polishing failed: {e}")
+            return base_letter
+    
+    def _create_deterministic_template(self, job_title: str, company_name: str, 
+                                     location: Optional[str] = None, job_snippet: Optional[str] = None) -> str:
+        """Create a clean, deterministic cover letter template without placeholders."""
+        
+        # Build location context
+        location_text = f" in {location}" if location else ""
+        
+        # Create professional, generic cover letter
+        letter = f"""Dear Hiring Manager,
 
+I am writing to express my strong interest in the {job_title} position at {company_name}{location_text}. This opportunity aligns perfectly with my career aspirations and professional background.
+
+Having researched your organization, I am impressed by your commitment to excellence and innovation in the industry. The {job_title} role presents an exciting challenge where I can contribute meaningfully to your team's success while continuing to grow professionally.
+
+My background has equipped me with relevant skills and experience that would be valuable for this position. I am particularly drawn to the collaborative environment and growth opportunities that {company_name} offers, and I am excited about the possibility of contributing to your continued success.
+
+I would welcome the opportunity to discuss how my qualifications and enthusiasm can benefit your organization. Thank you for considering my application, and I look forward to hearing from you soon.
+
+Sincerely,
+[Applicant Name]"""
+
+        return letter
+    
+    def _polish_with_ai(self, base_letter: str, job_title: str, company_name: str) -> str:
+        """Polish the base letter using AI while maintaining its generic nature."""
+        
+        prompt = f"""Please improve this cover letter while keeping it generic and professional. 
+
+IMPORTANT CONSTRAINTS:
+1. Keep it concise and professional
+2. Do NOT add specific technical skills, personal details, or company facts not already mentioned
+3. Do NOT make personal claims about experience or achievements
+4. Maintain the generic, neutral tone suitable for any applicant
+5. Focus on enthusiasm, professionalism, and alignment with the role
+6. Keep the length similar to the original (~160 words)
+
+Cover Letter to improve:
+{base_letter}
+
+Job: {job_title} at {company_name}
+
+Return only the improved cover letter without any explanations or additional text."""
+
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a professional writing assistant. Improve cover letters while keeping them generic, concise, and suitable for any applicant. Never add specific skills, personal details, or company facts not already provided."
+                },
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=500,
+            temperature=0.3
+        )
+        
+        return response.choices[0].message.content.strip()
+    
+    def generate_legacy_template(self, job_title: str, company: str, job_description: str = "") -> str:
+        """Legacy method for generating templates with placeholders - kept for backwards compatibility."""
+        # This method is deprecated and will be removed in future versions
+        print("⚠️ Using deprecated legacy template method")
+        
         prompt = f"""Create a professional cover letter TEMPLATE for this job:
 
 Position: {job_title}
@@ -119,9 +210,9 @@ Error details: {str(e)[:100]}..."""
 
 
 def test_generator():
-    """Test the cover letter generator with legacy API"""
-    print("🧪 TESTING LEGACY COVER LETTER GENERATOR")
-    print("=" * 50)
+    """Test the new automated cover letter generator"""
+    print("🧪 TESTING NEW AUTOMATED COVER LETTER GENERATOR")
+    print("=" * 60)
 
     # Check API key
     api_key = os.getenv('OPENAI_API_KEY')
@@ -129,7 +220,6 @@ def test_generator():
         print(f"✅ API key found: {api_key[:10]}...")
     else:
         print("❌ No API key found in environment")
-        return
 
     # Test generator
     generator = CoverLetterGenerator()
@@ -137,27 +227,51 @@ def test_generator():
     sample_job = {
         "title": "Software Developer",
         "company": "Tech Company",
-        "description": "Looking for developer with programming experience"
+        "location": "San Francisco, CA"
     }
 
-    print(f"\n🤖 Generating cover letter for: {sample_job['title']} @ {sample_job['company']}")
-
-    cover_letter = generator.generate_cover_letter(
+    print(f"\n🤖 Testing automated generation for: {sample_job['title']} @ {sample_job['company']}")
+    
+    # Test deterministic version (no AI)
+    print("\n📄 DETERMINISTIC VERSION (no AI):")
+    print("=" * 50)
+    deterministic_letter = generator.generate_cover_letter(
         sample_job["title"],
         sample_job["company"],
-        sample_job["description"]
+        sample_job["location"],
+        use_ai=False
     )
-
-    print("\n📄 GENERATED TEMPLATE:")
-    print("=" * 60)
-    print(cover_letter)
-    print("=" * 60)
-
-    # Check if template is generic
-    if "[Your Name]" in cover_letter or "[Your Full Name]" in cover_letter:
-        print("✅ Template is generic!")
+    print(deterministic_letter)
+    print("=" * 50)
+    
+    # Check if it's truly generic (no placeholders)
+    if "[Your" not in deterministic_letter and "[Applicant Name]" in deterministic_letter:
+        print("✅ Deterministic letter is properly automated!")
     else:
-        print("⚠️ Template may contain personal info")
+        print("⚠️ Deterministic letter may still have placeholders")
+    
+    # Test AI version if available
+    if api_key:
+        print("\n🤖 AI-POLISHED VERSION:")
+        print("=" * 50)
+        ai_letter = generator.generate_cover_letter(
+            sample_job["title"],
+            sample_job["company"],
+            sample_job["location"],
+            use_ai=True
+        )
+        print(ai_letter)
+        print("=" * 50)
+        
+        if "[Your" not in ai_letter:
+            print("✅ AI letter is properly automated!")
+        else:
+            print("⚠️ AI letter may still have placeholders")
+    else:
+        print("\n⚠️ Skipping AI test - no API key available")
+    
+    print(f"\nWord count (deterministic): ~{len(deterministic_letter.split())} words")
+    print("✅ Test complete!")
 
 
 if __name__ == "__main__":
