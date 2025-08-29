@@ -2,6 +2,7 @@ import streamlit as st
 import sys
 import os
 import time
+import re
 
 # Add project root to path so we can import our modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -17,12 +18,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# Email validation function
-def is_valid_email(email):
-    import re
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    return re.match(pattern, email) is not None
 
 # Custom CSS for better appearance
 st.markdown("""
@@ -135,11 +130,10 @@ with st.sidebar:
                     if jobs:
                         db = JobDatabase()
                         saved = db.save_jobs(jobs)
-                        # Quick success message - 1.5s
                         success_placeholder = st.success(f"✅ Found {len(jobs)} jobs, saved {saved} new ones!")
                         time.sleep(1.5)
                         success_placeholder.empty()
-                        st.rerun()  # Refresh to show new jobs
+                        st.rerun()
                     else:
                         error_placeholder = st.error("❌ No jobs found - LinkedIn may be blocking or structure changed")
                         time.sleep(1.5)
@@ -153,12 +147,11 @@ with st.sidebar:
         if st.button("🗑️ Clear DB", use_container_width=True):
             try:
                 db = JobDatabase()
-                # Properly clear the database
-                db.clear_all_jobs()  # Use the existing method
+                db.clear_all_jobs()
                 success_placeholder = st.success("✅ Database cleared!")
-                time.sleep(1.5)  # Quick message - 1.5 seconds only
+                time.sleep(1.5)
                 success_placeholder.empty()
-                st.rerun()  # Refresh to show empty state
+                st.rerun()
             except Exception as e:
                 error_placeholder = st.error(f"❌ Clear failed: {str(e)}")
                 time.sleep(1.5)
@@ -184,6 +177,10 @@ try:
 except Exception as e:
     st.error(f"Database error: {e}")
     all_jobs = []
+
+# Initialize session state
+if 'selected_job' not in st.session_state:
+    st.session_state.selected_job = None
 
 # Main content wrapper
 st.markdown('<div class="main-content">', unsafe_allow_html=True)
@@ -225,44 +222,32 @@ with job_col:
     st.header("🔍 Found Jobs")
 
     if all_jobs:
-        # Add search and filter options
         search_filter = st.text_input("🔍 Filter jobs", placeholder="Search by company or title...")
         sort_by = st.selectbox("Sort by", ["Most Recent", "Company A-Z", "Title A-Z"])
 
-        # Filter jobs based on search
         filtered_jobs = all_jobs
         if search_filter:
             filtered_jobs = [job for job in all_jobs if
                              search_filter.lower() in job[1].lower() or
                              search_filter.lower() in job[2].lower()]
 
-        # Sort jobs
         if sort_by == "Company A-Z":
             filtered_jobs = sorted(filtered_jobs, key=lambda x: x[2])
         elif sort_by == "Title A-Z":
             filtered_jobs = sorted(filtered_jobs, key=lambda x: x[1])
 
-        # Job selection for cover letter
-        if 'selected_job' not in st.session_state:
-            st.session_state.selected_job = None
-
-        # Jobs list - NO custom container, use natural browser scroll
         for i, job in enumerate(filtered_jobs):
-            # Job info without custom HTML div
             st.markdown(f"### {job[1]}")
             st.markdown(f"🏢 **{job[2]}**")
             st.markdown(f"📍 {job[3]} | 📅 Found: {job[4]} {f'| ✅ Applied' if job[5] else ''}")
 
-            # Generate Cover Letter button
             if st.button(f"✍️ Generate Cover Letter", key=f"select_{job[0]}", use_container_width=True):
                 st.session_state.selected_job = job
-                # Quick success message
                 success_placeholder = st.success(f"Selected: {job[1][:30]}...")
                 time.sleep(1.5)
                 success_placeholder.empty()
 
-            st.divider()  # Clean separator between jobs
-
+            st.divider()
     else:
         st.markdown("""
         <div style="text-align: center; padding: 3rem; background: #f8f9fa; border-radius: 10px; margin: 2rem 0;">
@@ -279,7 +264,6 @@ with cover_col:
         selected_job = st.session_state.selected_job
         st.info(f"📋 Selected Job: **{selected_job[1]}** at **{selected_job[2]}**")
 
-        # Cover letter generation form
         st.markdown("### 📝 Personal Information")
         user_name = st.text_input("👤 Your Name", placeholder="John Doe")
         user_email = st.text_input("📧 Your Email", placeholder="john.doe@email.com")
@@ -289,8 +273,13 @@ with cover_col:
         years_experience = st.selectbox("Years of Experience", ["0-1", "2-3", "4-5", "6-10", "10+"])
         key_skills = st.text_area("🔧 Key Skills", placeholder="Python, JavaScript, React, Machine Learning...")
 
+
+        def is_valid_email(email):
+            pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            return re.match(pattern, email) is not None
+
+
         if st.button("🤖 Generate Cover Letter", type="primary", use_container_width=True):
-            # Validation
             if not user_name:
                 warning_placeholder = st.warning("⚠️ Please enter your name")
                 time.sleep(1.5)
@@ -307,17 +296,20 @@ with cover_col:
                 try:
                     generator = CoverLetterGenerator()
                     with st.spinner("🤖 AI generating personalized cover letter..."):
-                        # Generate cover letter with correct parameters
                         cover_letter = generator.generate_cover_letter(
-                            selected_job[1],  # job_title
-                            selected_job[2]  # company_name
+                            job_title=selected_job[1],
+                            company=selected_job[2],
+                            user_name=user_name,
+                            user_email=user_email,
+                            user_phone=user_phone,
+                            years_experience=years_experience,
+                            key_skills=key_skills
                         )
 
                         st.markdown("### 📄 Generated Cover Letter")
                         st.text_area("", cover_letter, height=400, key="generated_cover_letter")
 
-                        # Action buttons - Download and Clear Letter
-                        col_download, col_clear_letter = st.columns(2)
+                        col_download, col_clear = st.columns(2)
 
                         with col_download:
                             st.download_button(
@@ -328,21 +320,17 @@ with cover_col:
                                 use_container_width=True
                             )
 
-                        with col_clear_letter:
-                            if st.button("🗑️ Clear Letter", use_container_width=True):
-                                # Clear only selected job and generated cover letter
-                                # Input fields remain filled
+                        with col_clear:
+                            if st.button("🗑️ Clear Cover Letter", use_container_width=True):
                                 st.session_state.selected_job = None
-                                success_placeholder = st.success("✅ Cover letter cleared!")
+                                success_placeholder = st.success("✅ All data cleared!")
                                 time.sleep(1.5)
                                 success_placeholder.empty()
                                 st.rerun()
 
-                        # Quick success message
                         success_placeholder = st.success("✅ Cover letter generated!")
                         time.sleep(1.5)
                         success_placeholder.empty()
-
                 except Exception as e:
                     error_placeholder = st.error(f"❌ Generation failed: {str(e)}")
                     time.sleep(2)
