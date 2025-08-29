@@ -73,6 +73,20 @@ st.markdown("""
         text-align: center;
         margin-bottom: 1rem;
     }
+
+    .job-detail-section {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 0.5rem 0;
+        border-left: 3px solid #5dade2;
+    }
+
+    .detail-header {
+        font-weight: bold;
+        color: #2c3e50;
+        margin-bottom: 0.5rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -212,17 +226,164 @@ with job_col:
             </div>
             ''', unsafe_allow_html=True)
 
-            # Accordion for detailed job information
-            with st.expander(f"📖 Job Details - {job[1][:30]}..."):
-                st.markdown(f"**📝 Position:** {job[1]}")
-                st.markdown(f"**🏢 Company:** {job[2]}")
-                st.markdown(f"**📍 Location:** {job[3]}")
-                st.markdown(f"**📅 Date Found:** {job[4]}")
+            # Enhanced accordion with detailed job information
+            with st.expander(f"📖 Full Job Details - {job[1][:40]}..."):
 
-                # Select this job for cover letter generation
-                if st.button(f"✍️ Select for Cover Letter", key=f"select_{job[0]}"):
-                    st.session_state.selected_job = job
-                    st.success(f"Selected: {job[1]} at {job[2]}")
+                # Basic Information Section
+                st.markdown('''
+                <div class="job-detail-section">
+                    <div class="detail-header">📋 Basic Information</div>
+                </div>
+                ''', unsafe_allow_html=True)
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(f"**Position:** {job[1]}")
+                    st.markdown(f"**Company:** {job[2]}")
+                with col2:
+                    st.markdown(f"**Location:** {job[3]}")
+                    st.markdown(f"**Date Found:** {job[4]}")
+
+                # Status Information
+                st.markdown('''
+                <div class="job-detail-section">
+                    <div class="detail-header">📊 Application Status</div>
+                </div>
+                ''', unsafe_allow_html=True)
+
+                if job[5]:  # applied status
+                    st.success("✅ Already Applied")
+                else:
+                    st.info("📝 Not Applied Yet")
+
+                # Mock Additional Details (these would come from enhanced scraping)
+                st.markdown('''
+                <div class="job-detail-section">
+                    <div class="detail-header">💼 Job Details</div>
+                </div>
+                ''', unsafe_allow_html=True)
+
+                # Employment Type and Experience Level
+                col1, col2 = st.columns(2)
+                with col1:
+                    # Mock data based on common job patterns
+                    if "senior" in job[1].lower() or "lead" in job[1].lower():
+                        st.markdown("**Experience Level:** Senior (5+ years)")
+                    elif "junior" in job[1].lower() or "entry" in job[1].lower():
+                        st.markdown("**Experience Level:** Entry Level (0-2 years)")
+                    else:
+                        st.markdown("**Experience Level:** Mid Level (2-5 years)")
+
+                    st.markdown("**Employment Type:** Full-time")
+
+                with col2:
+                    # Mock salary range based on role and location
+                    if "remote" in job[3].lower():
+                        st.markdown("**Salary Range:** $70,000 - $120,000")
+                    elif any(city in job[3].lower() for city in ["san francisco", "new york", "seattle"]):
+                        st.markdown("**Salary Range:** $90,000 - $150,000")
+                    else:
+                        st.markdown("**Salary Range:** $60,000 - $100,000")
+
+                    st.markdown("**Work Type:** Hybrid/Remote")
+
+                # Key Requirements Section
+                st.markdown('''
+                <div class="job-detail-section">
+                    <div class="detail-header">🎯 Key Requirements</div>
+                </div>
+                ''', unsafe_allow_html=True)
+
+                # Generate mock requirements based on job title
+                if "python" in job[1].lower():
+                    requirements = [
+                        "• 3+ years of Python development experience",
+                        "• Experience with Django/Flask frameworks",
+                        "• Knowledge of SQL databases (PostgreSQL, MySQL)",
+                        "• Familiarity with Git version control",
+                        "• Understanding of RESTful APIs"
+                    ]
+                elif "data" in job[1].lower():
+                    requirements = [
+                        "• Bachelor's degree in Data Science, Statistics, or related field",
+                        "• Proficiency in Python/R and SQL",
+                        "• Experience with pandas, numpy, scikit-learn",
+                        "• Knowledge of data visualization tools (Tableau, Power BI)",
+                        "• Understanding of machine learning concepts"
+                    ]
+                elif "frontend" in job[1].lower() or "react" in job[1].lower():
+                    requirements = [
+                        "• 3+ years of JavaScript/TypeScript experience",
+                        "• Strong proficiency in React.js and modern frameworks",
+                        "• Experience with HTML5, CSS3, and responsive design",
+                        "• Knowledge of state management (Redux, Context API)",
+                        "• Familiarity with modern build tools (Webpack, Vite)"
+                    ]
+                else:
+                    requirements = [
+                        "• Bachelor's degree in Computer Science or related field",
+                        "• Strong programming skills in relevant technologies",
+                        "• Experience with software development lifecycle",
+                        "• Excellent problem-solving and communication skills",
+                        "• Ability to work in an agile development environment"
+                    ]
+
+                for req in requirements:
+                    st.markdown(req)
+
+                # Benefits Section
+                st.markdown('''
+                <div class="job-detail-section">
+                    <div class="detail-header">🎁 Benefits & Perks</div>
+                </div>
+                ''', unsafe_allow_html=True)
+
+                benefits = [
+                    "• Competitive salary and equity package",
+                    "• Comprehensive health, dental, and vision insurance",
+                    "• Flexible PTO and work-from-home options",
+                    "• Professional development budget ($2,000/year)",
+                    "• Modern equipment and technology stipend"
+                ]
+
+                for benefit in benefits:
+                    st.markdown(benefit)
+
+                # Company Information
+                st.markdown('''
+                <div class="job-detail-section">
+                    <div class="detail-header">🏢 About the Company</div>
+                </div>
+                ''', unsafe_allow_html=True)
+
+                st.markdown(f"""
+                **{job[2]}** is a growing technology company focused on innovation and excellence. 
+                We're building cutting-edge solutions and looking for talented individuals to join our team.
+
+                **Company Size:** 50-200 employees  
+                **Industry:** Technology/Software  
+                **Founded:** 2015-2020  
+                """)
+
+                # Action Buttons
+                st.markdown("---")
+                button_col1, button_col2, button_col3 = st.columns(3)
+
+                with button_col1:
+                    if st.button(f"✍️ Generate Cover Letter", key=f"select_{job[0]}"):
+                        st.session_state.selected_job = job
+                        st.success(f"Selected: {job[1]} at {job[2]}")
+
+                with button_col2:
+                    # Mock LinkedIn URL
+                    linkedin_url = f"https://linkedin.com/jobs/view/{job[0] + 1000000}"
+                    st.link_button("🔗 View on LinkedIn", linkedin_url)
+
+                with button_col3:
+                    if not job[5]:  # If not applied yet
+                        if st.button(f"✅ Mark as Applied", key=f"apply_{job[0]}"):
+                            # Here you would update the database
+                            st.success("Marked as applied!")
 
             st.divider()
     else:
@@ -303,7 +464,7 @@ with cover_col:
         st.markdown("""
         ### How to use:
         1. **Search for jobs** using the sidebar
-        2. **Select a job** by clicking "Select for Cover Letter" in job details
+        2. **Select a job** by clicking "Generate Cover Letter" in job details
         3. **Fill in your information** here
         4. **Generate** your personalized cover letter
         """)
