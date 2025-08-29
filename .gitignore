@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+job_hunt.db
+data/exports/*
+.DS_Store
+venv/

@@ -1,0 +1,47 @@
+{
+    "user_profile": {
+        "name": "[Your Full Name]",
+        "email": "your.email@example.com",
+        "job_title": "[Your Current Job Title]",
+        "experience_years": "[Years of Experience]",
+        "remote_only": true
+    },
+    "job_preferences": {
+        "keywords": [
+            "[Your Primary Skill]",
+            "[Your Job Title]",
+            "[Your Specialty]",
+            "[Your Technology]",
+            "[Your Framework]",
+            "[Your Programming Language]",
+            "[Your Domain]",
+            "[Your Tool/Platform]"
+        ],
+        "exclude_keywords": [
+            "senior only",
+            "10+ years required",
+            "PhD required",
+            "on-site only",
+            "relocation required",
+            "security clearance"
+        ],
+        "locations": [
+            "remote",
+            "[Your City]",
+            "[Your Country]",
+            "[Your Region]"
+        ],
+        "max_jobs_per_run": 20
+    },
+    "scraping_settings": {
+        "delay_between_requests": 3,
+        "timeout_seconds": 30,
+        "headless_browser": true,
+        "max_retries": 3
+    },
+    "application_settings": {
+        "auto_apply": false,
+        "save_cover_letters": true,
+        "track_applications": true
+    }
+}
