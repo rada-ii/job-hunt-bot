@@ -1,6 +1,7 @@
 import streamlit as st
 import sys
 import os
+import time
 
 # Add project root to path so we can import our modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -16,6 +17,12 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Email validation function
+def is_valid_email(email):
+    import re
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
 
 # Custom CSS for better appearance
 st.markdown("""
@@ -37,6 +44,7 @@ st.markdown("""
         box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         margin: 1rem 0;
         border-left: 4px solid #5dade2;
+        position: relative;
     }
 
     .job-title {
@@ -55,6 +63,7 @@ st.markdown("""
     .job-details {
         color: #7f8c8d;
         font-size: 0.9rem;
+        margin-bottom: 1rem;
     }
 
     .metric-card {
@@ -74,18 +83,28 @@ st.markdown("""
         margin-bottom: 1rem;
     }
 
-    .job-detail-section {
-        background: #f8f9fa;
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 0.5rem 0;
-        border-left: 3px solid #5dade2;
+    /* Remove custom container - use normal browser scroll */
+    .jobs-list {
+        padding: 0;
     }
 
-    .detail-header {
-        font-weight: bold;
-        color: #2c3e50;
-        margin-bottom: 0.5rem;
+    /* Footer fixed to bottom */
+    .footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        color: white;
+        text-align: center;
+        padding: 15px;
+        z-index: 1000;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    }
+
+    /* Add bottom padding to main content so footer doesn't overlap */
+    .main-content {
+        padding-bottom: 80px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -116,33 +135,43 @@ with st.sidebar:
                     if jobs:
                         db = JobDatabase()
                         saved = db.save_jobs(jobs)
-                        st.success(f"✅ Found {len(jobs)} jobs, saved {saved} new ones!")
+                        # Quick success message - 1.5s
+                        success_placeholder = st.success(f"✅ Found {len(jobs)} jobs, saved {saved} new ones!")
+                        time.sleep(1.5)
+                        success_placeholder.empty()
                         st.rerun()  # Refresh to show new jobs
                     else:
-                        st.error("❌ No jobs found - LinkedIn may be blocking or structure changed")
+                        error_placeholder = st.error("❌ No jobs found - LinkedIn may be blocking or structure changed")
+                        time.sleep(1.5)
+                        error_placeholder.empty()
                 except Exception as e:
-                    st.error(f"❌ Search failed: {str(e)}")
-                    st.info(
-                        "This might be due to Chrome/Chromium not being available on the server. Try the local version or check the logs.")
+                    error_placeholder = st.error(f"❌ Search failed: {str(e)}")
+                    time.sleep(2)
+                    error_placeholder.empty()
 
     with search_col2:
         if st.button("🗑️ Clear DB", use_container_width=True):
             try:
                 db = JobDatabase()
-                db.clear_all_jobs()
-                st.success("✅ Database cleared!")
+                # Properly clear the database
+                db.clear_all_jobs()  # Use the existing method
+                success_placeholder = st.success("✅ Database cleared!")
+                time.sleep(1.5)  # Quick message - 1.5 seconds only
+                success_placeholder.empty()
                 st.rerun()  # Refresh to show empty state
             except Exception as e:
-                st.error(f"❌ Clear failed: {str(e)}")
+                error_placeholder = st.error(f"❌ Clear failed: {str(e)}")
+                time.sleep(1.5)
+                error_placeholder.empty()
 
 # Debug info (remove in production)
 with st.sidebar:
     st.markdown("---")
     if st.checkbox("🐛 Debug Info"):
-        db = JobDatabase()
-        st.write(f"Database path: {db.db_path}")
-        st.write(f"Platform: {os.name}")
         try:
+            db = JobDatabase()
+            st.write(f"Database path: {db.db_path}")
+            st.write(f"Platform: {os.name}")
             jobs = db.get_all_jobs()
             st.write(f"Jobs in DB: {len(jobs)}")
         except Exception as e:
@@ -155,6 +184,9 @@ try:
 except Exception as e:
     st.error(f"Database error: {e}")
     all_jobs = []
+
+# Main content wrapper
+st.markdown('<div class="main-content">', unsafe_allow_html=True)
 
 # Metrics section
 col1, col2 = st.columns([1, 1])
@@ -214,178 +246,23 @@ with job_col:
         if 'selected_job' not in st.session_state:
             st.session_state.selected_job = None
 
+        # Jobs list - NO custom container, use natural browser scroll
         for i, job in enumerate(filtered_jobs):
-            # Job card with basic info
-            st.markdown(f'''
-            <div class="job-card">
-                <div class="job-title">{job[1]}</div>
-                <div class="job-company">🏢 {job[2]}</div>
-                <div class="job-details">
-                    📍 {job[3]} | 📅 Found: {job[4]}
-                </div>
-            </div>
-            ''', unsafe_allow_html=True)
+            # Job info without custom HTML div
+            st.markdown(f"### {job[1]}")
+            st.markdown(f"🏢 **{job[2]}**")
+            st.markdown(f"📍 {job[3]} | 📅 Found: {job[4]} {f'| ✅ Applied' if job[5] else ''}")
 
-            # Enhanced accordion with detailed job information
-            with st.expander(f"📖 Full Job Details - {job[1][:40]}..."):
+            # Generate Cover Letter button
+            if st.button(f"✍️ Generate Cover Letter", key=f"select_{job[0]}", use_container_width=True):
+                st.session_state.selected_job = job
+                # Quick success message
+                success_placeholder = st.success(f"Selected: {job[1][:30]}...")
+                time.sleep(1.5)
+                success_placeholder.empty()
 
-                # Basic Information Section
-                st.markdown('''
-                <div class="job-detail-section">
-                    <div class="detail-header">📋 Basic Information</div>
-                </div>
-                ''', unsafe_allow_html=True)
+            st.divider()  # Clean separator between jobs
 
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown(f"**Position:** {job[1]}")
-                    st.markdown(f"**Company:** {job[2]}")
-                with col2:
-                    st.markdown(f"**Location:** {job[3]}")
-                    st.markdown(f"**Date Found:** {job[4]}")
-
-                # Status Information
-                st.markdown('''
-                <div class="job-detail-section">
-                    <div class="detail-header">📊 Application Status</div>
-                </div>
-                ''', unsafe_allow_html=True)
-
-                if job[5]:  # applied status
-                    st.success("✅ Already Applied")
-                else:
-                    st.info("📝 Not Applied Yet")
-
-                # Mock Additional Details (these would come from enhanced scraping)
-                st.markdown('''
-                <div class="job-detail-section">
-                    <div class="detail-header">💼 Job Details</div>
-                </div>
-                ''', unsafe_allow_html=True)
-
-                # Employment Type and Experience Level
-                col1, col2 = st.columns(2)
-                with col1:
-                    # Mock data based on common job patterns
-                    if "senior" in job[1].lower() or "lead" in job[1].lower():
-                        st.markdown("**Experience Level:** Senior (5+ years)")
-                    elif "junior" in job[1].lower() or "entry" in job[1].lower():
-                        st.markdown("**Experience Level:** Entry Level (0-2 years)")
-                    else:
-                        st.markdown("**Experience Level:** Mid Level (2-5 years)")
-
-                    st.markdown("**Employment Type:** Full-time")
-
-                with col2:
-                    # Mock salary range based on role and location
-                    if "remote" in job[3].lower():
-                        st.markdown("**Salary Range:** $70,000 - $120,000")
-                    elif any(city in job[3].lower() for city in ["san francisco", "new york", "seattle"]):
-                        st.markdown("**Salary Range:** $90,000 - $150,000")
-                    else:
-                        st.markdown("**Salary Range:** $60,000 - $100,000")
-
-                    st.markdown("**Work Type:** Hybrid/Remote")
-
-                # Key Requirements Section
-                st.markdown('''
-                <div class="job-detail-section">
-                    <div class="detail-header">🎯 Key Requirements</div>
-                </div>
-                ''', unsafe_allow_html=True)
-
-                # Generate mock requirements based on job title
-                if "python" in job[1].lower():
-                    requirements = [
-                        "• 3+ years of Python development experience",
-                        "• Experience with Django/Flask frameworks",
-                        "• Knowledge of SQL databases (PostgreSQL, MySQL)",
-                        "• Familiarity with Git version control",
-                        "• Understanding of RESTful APIs"
-                    ]
-                elif "data" in job[1].lower():
-                    requirements = [
-                        "• Bachelor's degree in Data Science, Statistics, or related field",
-                        "• Proficiency in Python/R and SQL",
-                        "• Experience with pandas, numpy, scikit-learn",
-                        "• Knowledge of data visualization tools (Tableau, Power BI)",
-                        "• Understanding of machine learning concepts"
-                    ]
-                elif "frontend" in job[1].lower() or "react" in job[1].lower():
-                    requirements = [
-                        "• 3+ years of JavaScript/TypeScript experience",
-                        "• Strong proficiency in React.js and modern frameworks",
-                        "• Experience with HTML5, CSS3, and responsive design",
-                        "• Knowledge of state management (Redux, Context API)",
-                        "• Familiarity with modern build tools (Webpack, Vite)"
-                    ]
-                else:
-                    requirements = [
-                        "• Bachelor's degree in Computer Science or related field",
-                        "• Strong programming skills in relevant technologies",
-                        "• Experience with software development lifecycle",
-                        "• Excellent problem-solving and communication skills",
-                        "• Ability to work in an agile development environment"
-                    ]
-
-                for req in requirements:
-                    st.markdown(req)
-
-                # Benefits Section
-                st.markdown('''
-                <div class="job-detail-section">
-                    <div class="detail-header">🎁 Benefits & Perks</div>
-                </div>
-                ''', unsafe_allow_html=True)
-
-                benefits = [
-                    "• Competitive salary and equity package",
-                    "• Comprehensive health, dental, and vision insurance",
-                    "• Flexible PTO and work-from-home options",
-                    "• Professional development budget ($2,000/year)",
-                    "• Modern equipment and technology stipend"
-                ]
-
-                for benefit in benefits:
-                    st.markdown(benefit)
-
-                # Company Information
-                st.markdown('''
-                <div class="job-detail-section">
-                    <div class="detail-header">🏢 About the Company</div>
-                </div>
-                ''', unsafe_allow_html=True)
-
-                st.markdown(f"""
-                **{job[2]}** is a growing technology company focused on innovation and excellence. 
-                We're building cutting-edge solutions and looking for talented individuals to join our team.
-
-                **Company Size:** 50-200 employees  
-                **Industry:** Technology/Software  
-                **Founded:** 2015-2020  
-                """)
-
-                # Action Buttons
-                st.markdown("---")
-                button_col1, button_col2, button_col3 = st.columns(3)
-
-                with button_col1:
-                    if st.button(f"✍️ Generate Cover Letter", key=f"select_{job[0]}"):
-                        st.session_state.selected_job = job
-                        st.success(f"Selected: {job[1]} at {job[2]}")
-
-                with button_col2:
-                    # Mock LinkedIn URL
-                    linkedin_url = f"https://linkedin.com/jobs/view/{job[0] + 1000000}"
-                    st.link_button("🔗 View on LinkedIn", linkedin_url)
-
-                with button_col3:
-                    if not job[5]:  # If not applied yet
-                        if st.button(f"✅ Mark as Applied", key=f"apply_{job[0]}"):
-                            # Here you would update the database
-                            st.success("Marked as applied!")
-
-            st.divider()
     else:
         st.markdown("""
         <div style="text-align: center; padding: 3rem; background: #f8f9fa; border-radius: 10px; margin: 2rem 0;">
@@ -413,67 +290,79 @@ with cover_col:
         key_skills = st.text_area("🔧 Key Skills", placeholder="Python, JavaScript, React, Machine Learning...")
 
         if st.button("🤖 Generate Cover Letter", type="primary", use_container_width=True):
-            if user_name and user_email:
+            # Validation
+            if not user_name:
+                warning_placeholder = st.warning("⚠️ Please enter your name")
+                time.sleep(1.5)
+                warning_placeholder.empty()
+            elif not user_email:
+                warning_placeholder = st.warning("⚠️ Please enter your email")
+                time.sleep(1.5)
+                warning_placeholder.empty()
+            elif not is_valid_email(user_email):
+                warning_placeholder = st.warning("⚠️ Please enter a valid email address")
+                time.sleep(1.5)
+                warning_placeholder.empty()
+            else:
                 try:
                     generator = CoverLetterGenerator()
                     with st.spinner("🤖 AI generating personalized cover letter..."):
-                        # Create job context for better cover letter
-                        job_context = {
-                            'title': selected_job[1],
-                            'company': selected_job[2],
-                            'location': selected_job[3],
-                            'user_name': user_name,
-                            'user_email': user_email,
-                            'user_phone': user_phone,
-                            'years_experience': years_experience,
-                            'key_skills': key_skills
-                        }
-
+                        # Generate cover letter with correct parameters
                         cover_letter = generator.generate_cover_letter(
-                            selected_job[1],
-                            selected_job[2],
-                            user_context=job_context
+                            selected_job[1],  # job_title
+                            selected_job[2]  # company_name
                         )
 
                         st.markdown("### 📄 Generated Cover Letter")
                         st.text_area("", cover_letter, height=400, key="generated_cover_letter")
 
-                        # Download and copy options
-                        col_download, col_clear = st.columns(2)
+                        # Action buttons - Download and Clear Letter
+                        col_download, col_clear_letter = st.columns(2)
+
                         with col_download:
                             st.download_button(
                                 "💾 Download Cover Letter",
                                 cover_letter,
                                 file_name=f"cover_letter_{selected_job[2].replace(' ', '_')}_{selected_job[1].replace(' ', '_')}.txt",
-                                mime="text/plain"
+                                mime="text/plain",
+                                use_container_width=True
                             )
-                        with col_clear:
-                            if st.button("🗑️ Clear Selection"):
+
+                        with col_clear_letter:
+                            if st.button("🗑️ Clear Letter", use_container_width=True):
+                                # Clear only selected job and generated cover letter
+                                # Input fields remain filled
                                 st.session_state.selected_job = None
+                                success_placeholder = st.success("✅ Cover letter cleared!")
+                                time.sleep(1.5)
+                                success_placeholder.empty()
                                 st.rerun()
 
-                        st.success("✅ Cover letter generated successfully!")
+                        # Quick success message
+                        success_placeholder = st.success("✅ Cover letter generated!")
+                        time.sleep(1.5)
+                        success_placeholder.empty()
 
                 except Exception as e:
-                    st.error(f"❌ Cover letter generation failed: {str(e)}")
-                    st.info("Make sure your OpenAI API key is set in Streamlit secrets")
-            else:
-                st.warning("⚠️ Please fill in at least your name and email")
+                    error_placeholder = st.error(f"❌ Generation failed: {str(e)}")
+                    time.sleep(2)
+                    error_placeholder.empty()
     else:
         st.info("👆 Select a job from the left panel to generate a cover letter")
         st.markdown("""
         ### How to use:
         1. **Search for jobs** using the sidebar
-        2. **Select a job** by clicking "Generate Cover Letter" in job details
+        2. **Click "✍️ Generate"** next to any job
         3. **Fill in your information** here
         4. **Generate** your personalized cover letter
         """)
 
-# Footer
-st.markdown("---")
+# Close main content wrapper
+st.markdown('</div>', unsafe_allow_html=True)
+
+# Fixed footer at bottom of page
 st.markdown("""
-<div style="text-align: center; color: #7f8c8d; padding: 1rem;">
-    <p>🤖 Job Hunt Bot | Built with ❤️ and Streamlit</p>
-    <p style="font-size: 0.8rem;">For best scraping performance, run locally or ensure Chromium is installed on the server</p>
+<div class="footer">
+    <p>🤖 <strong>Job Hunt Bot</strong> | Built with ❤️ by <strong>Rada Ivanković</strong> | Powered by Streamlit & AI</p>
 </div>
 """, unsafe_allow_html=True)
