@@ -108,7 +108,8 @@ with st.sidebar:
                         st.error("❌ No jobs found - LinkedIn may be blocking or structure changed")
                 except Exception as e:
                     st.error(f"❌ Search failed: {str(e)}")
-                    st.info("This might be due to Chrome/Chromium not being available on the server. Try the local version or check the logs.")
+                    st.info(
+                        "This might be due to Chrome/Chromium not being available on the server. Try the local version or check the logs.")
 
     with search_col2:
         if st.button("🗑️ Clear DB", use_container_width=True):
@@ -133,22 +134,24 @@ with st.sidebar:
         except Exception as e:
             st.write(f"DB Error: {e}")
 
-# Main content area
+# Get all jobs for display
+try:
+    db = JobDatabase()
+    all_jobs = db.get_all_jobs()
+except Exception as e:
+    st.error(f"Database error: {e}")
+    all_jobs = []
+
+# Metrics section
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    try:
-        db = JobDatabase()
-        all_jobs = db.get_all_jobs()
-        st.markdown(f'''
-        <div class="metric-card">
-            <h2>{len(all_jobs) if all_jobs else 0}</h2>
-            <p>Total Jobs</p>
-        </div>
-        ''', unsafe_allow_html=True)
-    except Exception as e:
-        st.error(f"Database error: {e}")
-        all_jobs = []
+    st.markdown(f'''
+    <div class="metric-card">
+        <h2>{len(all_jobs) if all_jobs else 0}</h2>
+        <p>Total Jobs</p>
+    </div>
+    ''', unsafe_allow_html=True)
 
 with col2:
     if all_jobs:
@@ -169,34 +172,36 @@ with col2:
 
 st.markdown("---")
 
-# Jobs display section
-st.markdown("## 📋 Available Positions")
+# MAIN LAYOUT - Two columns for jobs and cover letter
+job_col, cover_col = st.columns([1, 1])
 
-if all_jobs:
-    # Add search and filter options
-    col1, col2 = st.columns([3, 1])
-    with col1:
+with job_col:
+    st.header("🔍 Found Jobs")
+
+    if all_jobs:
+        # Add search and filter options
         search_filter = st.text_input("🔍 Filter jobs", placeholder="Search by company or title...")
-    with col2:
         sort_by = st.selectbox("Sort by", ["Most Recent", "Company A-Z", "Title A-Z"])
 
-    # Filter jobs based on search
-    filtered_jobs = all_jobs
-    if search_filter:
-        filtered_jobs = [job for job in all_jobs if
-                         search_filter.lower() in job[1].lower() or
-                         search_filter.lower() in job[2].lower()]
+        # Filter jobs based on search
+        filtered_jobs = all_jobs
+        if search_filter:
+            filtered_jobs = [job for job in all_jobs if
+                             search_filter.lower() in job[1].lower() or
+                             search_filter.lower() in job[2].lower()]
 
-    # Sort jobs
-    if sort_by == "Company A-Z":
-        filtered_jobs = sorted(filtered_jobs, key=lambda x: x[2])
-    elif sort_by == "Title A-Z":
-        filtered_jobs = sorted(filtered_jobs, key=lambda x: x[1])
+        # Sort jobs
+        if sort_by == "Company A-Z":
+            filtered_jobs = sorted(filtered_jobs, key=lambda x: x[2])
+        elif sort_by == "Title A-Z":
+            filtered_jobs = sorted(filtered_jobs, key=lambda x: x[1])
 
-    for i, job in enumerate(filtered_jobs):
-        col1, col2 = st.columns([4, 1])
+        # Job selection for cover letter
+        if 'selected_job' not in st.session_state:
+            st.session_state.selected_job = None
 
-        with col1:
+        for i, job in enumerate(filtered_jobs):
+            # Job card with basic info
             st.markdown(f'''
             <div class="job-card">
                 <div class="job-title">{job[1]}</div>
@@ -207,43 +212,101 @@ if all_jobs:
             </div>
             ''', unsafe_allow_html=True)
 
-        with col2:
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("📝 Generate Cover Letter", key=f"btn_{job[0]}", type="secondary"):
+            # Accordion for detailed job information
+            with st.expander(f"📖 Job Details - {job[1][:30]}..."):
+                st.markdown(f"**📝 Position:** {job[1]}")
+                st.markdown(f"**🏢 Company:** {job[2]}")
+                st.markdown(f"**📍 Location:** {job[3]}")
+                st.markdown(f"**📅 Date Found:** {job[4]}")
+
+                # Select this job for cover letter generation
+                if st.button(f"✍️ Select for Cover Letter", key=f"select_{job[0]}"):
+                    st.session_state.selected_job = job
+                    st.success(f"Selected: {job[1]} at {job[2]}")
+
+            st.divider()
+    else:
+        st.markdown("""
+        <div style="text-align: center; padding: 3rem; background: #f8f9fa; border-radius: 10px; margin: 2rem 0;">
+            <h3>🔍 No Jobs Found</h3>
+            <p>Use the sidebar to search for jobs and get started!</p>
+            <p>💡 Try searching for "Python developer", "Data scientist", or "Software engineer"</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+with cover_col:
+    st.header("✍️ Cover Letter Generator")
+
+    if st.session_state.selected_job:
+        selected_job = st.session_state.selected_job
+        st.info(f"📋 Selected Job: **{selected_job[1]}** at **{selected_job[2]}**")
+
+        # Cover letter generation form
+        st.markdown("### 📝 Personal Information")
+        user_name = st.text_input("👤 Your Name", placeholder="John Doe")
+        user_email = st.text_input("📧 Your Email", placeholder="john.doe@email.com")
+        user_phone = st.text_input("📱 Your Phone", placeholder="+1 (555) 123-4567")
+
+        st.markdown("### 💼 Experience")
+        years_experience = st.selectbox("Years of Experience", ["0-1", "2-3", "4-5", "6-10", "10+"])
+        key_skills = st.text_area("🔧 Key Skills", placeholder="Python, JavaScript, React, Machine Learning...")
+
+        if st.button("🤖 Generate Cover Letter", type="primary", use_container_width=True):
+            if user_name and user_email:
                 try:
                     generator = CoverLetterGenerator()
-                    with st.spinner("🤖 AI generating cover letter template..."):
-                        cover_letter = generator.generate_cover_letter(job[1], job[2])
+                    with st.spinner("🤖 AI generating personalized cover letter..."):
+                        # Create job context for better cover letter
+                        job_context = {
+                            'title': selected_job[1],
+                            'company': selected_job[2],
+                            'location': selected_job[3],
+                            'user_name': user_name,
+                            'user_email': user_email,
+                            'user_phone': user_phone,
+                            'years_experience': years_experience,
+                            'key_skills': key_skills
+                        }
 
-                        # Show cover letter in a modal-like expander
-                        with st.expander("📄 Generated Cover Letter Template", expanded=True):
-                            st.markdown("### Professional Cover Letter Template")
-                            st.text_area("", cover_letter, height=400, key=f"cover_{job[0]}")
+                        cover_letter = generator.generate_cover_letter(
+                            selected_job[1],
+                            selected_job[2],
+                            user_context=job_context
+                        )
 
-                            col_download, col_copy = st.columns(2)
-                            with col_download:
-                                st.download_button(
-                                    "💾 Download Template",
-                                    cover_letter,
-                                    file_name=f"cover_letter_template_{job[2].replace(' ', '_')}_{job[1].replace(' ', '_')}.txt",
-                                    mime="text/plain",
-                                    key=f"download_{job[0]}"
-                                )
-                            with col_copy:
-                                st.info("💡 Copy the template above and customize with your details!")
+                        st.markdown("### 📄 Generated Cover Letter")
+                        st.text_area("", cover_letter, height=400, key="generated_cover_letter")
+
+                        # Download and copy options
+                        col_download, col_clear = st.columns(2)
+                        with col_download:
+                            st.download_button(
+                                "💾 Download Cover Letter",
+                                cover_letter,
+                                file_name=f"cover_letter_{selected_job[2].replace(' ', '_')}_{selected_job[1].replace(' ', '_')}.txt",
+                                mime="text/plain"
+                            )
+                        with col_clear:
+                            if st.button("🗑️ Clear Selection"):
+                                st.session_state.selected_job = None
+                                st.rerun()
+
+                        st.success("✅ Cover letter generated successfully!")
+
                 except Exception as e:
                     st.error(f"❌ Cover letter generation failed: {str(e)}")
                     st.info("Make sure your OpenAI API key is set in Streamlit secrets")
-
-else:
-    st.markdown("""
-    <div style="text-align: center; padding: 3rem; background: #f8f9fa; border-radius: 10px; margin: 2rem 0;">
-        <h3>🔍 No Jobs Found</h3>
-        <p>Use the sidebar to search for jobs and get started!</p>
-        <p>💡 Try searching for "Python developer", "Data scientist", or "Software engineer"</p>
-        <p style="font-size: 0.9rem; color: #666;">Note: LinkedIn scraping may not work on cloud environments without proper Chrome/Chromium setup</p>
-    </div>
-    """, unsafe_allow_html=True)
+            else:
+                st.warning("⚠️ Please fill in at least your name and email")
+    else:
+        st.info("👆 Select a job from the left panel to generate a cover letter")
+        st.markdown("""
+        ### How to use:
+        1. **Search for jobs** using the sidebar
+        2. **Select a job** by clicking "Select for Cover Letter" in job details
+        3. **Fill in your information** here
+        4. **Generate** your personalized cover letter
+        """)
 
 # Footer
 st.markdown("---")
