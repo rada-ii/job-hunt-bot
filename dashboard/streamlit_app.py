@@ -18,12 +18,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Email validation function
-def is_valid_email(email):
-    import re
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    return re.match(pattern, email) is not None
-
 # Custom CSS for better appearance
 st.markdown("""
 <style>
@@ -185,6 +179,15 @@ except Exception as e:
     st.error(f"Database error: {e}")
     all_jobs = []
 
+# Initialize session state for cover letter functionality
+if 'selected_job' not in st.session_state:
+    st.session_state.selected_job = None
+if 'generated_letter' not in st.session_state:
+    st.session_state.generated_letter = None
+if 'ai_polish_enabled' not in st.session_state:
+    # Default to True if API key is available
+    st.session_state.ai_polish_enabled = bool(os.getenv('OPENAI_API_KEY'))
+
 # Main content wrapper
 st.markdown('<div class="main-content">', unsafe_allow_html=True)
 
@@ -242,10 +245,6 @@ with job_col:
         elif sort_by == "Title A-Z":
             filtered_jobs = sorted(filtered_jobs, key=lambda x: x[1])
 
-        # Job selection for cover letter
-        if 'selected_job' not in st.session_state:
-            st.session_state.selected_job = None
-
         # Jobs list - NO custom container, use natural browser scroll
         for i, job in enumerate(filtered_jobs):
             # Job info without custom HTML div
@@ -255,11 +254,30 @@ with job_col:
 
             # Generate Cover Letter button
             if st.button(f"✍️ Generate Cover Letter", key=f"select_{job[0]}", use_container_width=True):
+                # Set selected job and reset generated letter to trigger new generation
                 st.session_state.selected_job = job
-                # Quick success message
-                success_placeholder = st.success(f"Selected: {job[1][:30]}...")
-                time.sleep(1.5)
-                success_placeholder.empty()
+                st.session_state.generated_letter = None
+                
+                # Generate cover letter automatically
+                try:
+                    generator = CoverLetterGenerator()
+                    with st.spinner("🤖 Generating cover letter..."):
+                        cover_letter = generator.generate_cover_letter(
+                            job[1],  # job_title
+                            job[2],  # company_name
+                            job[3],  # location
+                            use_ai=st.session_state.ai_polish_enabled
+                        )
+                        st.session_state.generated_letter = cover_letter
+                        
+                    success_placeholder = st.success(f"✅ Generated cover letter for {job[1][:30]}...")
+                    time.sleep(1.5)
+                    success_placeholder.empty()
+                    st.rerun()
+                except Exception as e:
+                    error_placeholder = st.error(f"❌ Generation failed: {str(e)}")
+                    time.sleep(2)
+                    error_placeholder.empty()
 
             st.divider()  # Clean separator between jobs
 
@@ -277,84 +295,131 @@ with cover_col:
 
     if st.session_state.selected_job:
         selected_job = st.session_state.selected_job
-        st.info(f"📋 Selected Job: **{selected_job[1]}** at **{selected_job[2]}**")
-
-        # Cover letter generation form
-        st.markdown("### 📝 Personal Information")
-        user_name = st.text_input("👤 Your Name", placeholder="John Doe")
-        user_email = st.text_input("📧 Your Email", placeholder="john.doe@email.com")
-        user_phone = st.text_input("📱 Your Phone", placeholder="+1 (555) 123-4567")
-
-        st.markdown("### 💼 Experience")
-        years_experience = st.selectbox("Years of Experience", ["0-1", "2-3", "4-5", "6-10", "10+"])
-        key_skills = st.text_area("🔧 Key Skills", placeholder="Python, JavaScript, React, Machine Learning...")
-
-        if st.button("🤖 Generate Cover Letter", type="primary", use_container_width=True):
-            # Validation
-            if not user_name:
-                warning_placeholder = st.warning("⚠️ Please enter your name")
-                time.sleep(1.5)
-                warning_placeholder.empty()
-            elif not user_email:
-                warning_placeholder = st.warning("⚠️ Please enter your email")
-                time.sleep(1.5)
-                warning_placeholder.empty()
-            elif not is_valid_email(user_email):
-                warning_placeholder = st.warning("⚠️ Please enter a valid email address")
-                time.sleep(1.5)
-                warning_placeholder.empty()
-            else:
+        
+        # Display job information
+        st.markdown("### 📋 Selected Job")
+        col_info1, col_info2 = st.columns(2)
+        with col_info1:
+            st.write(f"**Title:** {selected_job[1]}")
+            st.write(f"**Company:** {selected_job[2]}")
+        with col_info2:
+            st.write(f"**Location:** {selected_job[3]}")
+            st.write(f"**Date Found:** {selected_job[4]}")
+        
+        st.divider()
+        
+        # Cover Letter Controls
+        if st.session_state.generated_letter:
+            st.markdown("### 📄 Generated Cover Letter")
+            
+            # Controls row
+            control_col1, control_col2, control_col3 = st.columns(3)
+            
+            with control_col1:
+                # AI Polish toggle (only show if API key available)
+                if os.getenv('OPENAI_API_KEY'):
+                    ai_toggle = st.checkbox(
+                        "🤖 AI Polish", 
+                        value=st.session_state.ai_polish_enabled,
+                        help="Use AI to enhance the cover letter"
+                    )
+                    if ai_toggle != st.session_state.ai_polish_enabled:
+                        st.session_state.ai_polish_enabled = ai_toggle
+                else:
+                    st.info("💡 AI polish unavailable (no API key)")
+            
+            with control_col2:
+                if st.button("🔄 Regenerate", use_container_width=True, help="Generate a new version"):
+                    try:
+                        generator = CoverLetterGenerator()
+                        with st.spinner("🤖 Regenerating..."):
+                            cover_letter = generator.generate_cover_letter(
+                                selected_job[1],  # job_title
+                                selected_job[2],  # company_name
+                                selected_job[3],  # location
+                                use_ai=st.session_state.ai_polish_enabled
+                            )
+                            st.session_state.generated_letter = cover_letter
+                            st.success("✅ Regenerated!")
+                            time.sleep(1)
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Regeneration failed: {str(e)}")
+            
+            with control_col3:
+                if st.button("📝 Use Basic Version", use_container_width=True, help="Switch to deterministic version"):
+                    try:
+                        generator = CoverLetterGenerator()
+                        with st.spinner("📝 Generating basic version..."):
+                            cover_letter = generator.generate_cover_letter(
+                                selected_job[1],  # job_title
+                                selected_job[2],  # company_name
+                                selected_job[3],  # location
+                                use_ai=False
+                            )
+                            st.session_state.generated_letter = cover_letter
+                            st.session_state.ai_polish_enabled = False
+                            st.success("✅ Switched to basic version!")
+                            time.sleep(1)
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Failed to generate basic version: {str(e)}")
+            
+            # Display the generated letter (read-only)
+            st.text_area(
+                "",
+                st.session_state.generated_letter,
+                height=400,
+                disabled=True,  # Read-only
+                key="display_letter",
+                help="This is your generated cover letter"
+            )
+            
+            # Action buttons row
+            action_col1, action_col2 = st.columns(2)
+            
+            with action_col1:
+                st.download_button(
+                    "💾 Download Cover Letter",
+                    st.session_state.generated_letter,
+                    file_name=f"cover_letter_{selected_job[2].replace(' ', '_')}_{selected_job[1].replace(' ', '_')}.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+            
+            with action_col2:
+                if st.button("🗑️ Clear & Change Job", use_container_width=True):
+                    st.session_state.selected_job = None
+                    st.session_state.generated_letter = None
+                    st.success("✅ Cleared! Select a new job.")
+                    time.sleep(1.5)
+                    st.rerun()
+        
+        else:
+            # No letter generated yet - show generating message
+            with st.spinner("🤖 Generating your cover letter automatically..."):
                 try:
                     generator = CoverLetterGenerator()
-                    with st.spinner("🤖 AI generating personalized cover letter..."):
-                        # Generate cover letter with correct parameters
-                        cover_letter = generator.generate_cover_letter(
-                            selected_job[1],  # job_title
-                            selected_job[2]  # company_name
-                        )
-
-                        st.markdown("### 📄 Generated Cover Letter")
-                        st.text_area("", cover_letter, height=400, key="generated_cover_letter")
-
-                        # Action buttons - Download and Clear Letter
-                        col_download, col_clear_letter = st.columns(2)
-
-                        with col_download:
-                            st.download_button(
-                                "💾 Download Cover Letter",
-                                cover_letter,
-                                file_name=f"cover_letter_{selected_job[2].replace(' ', '_')}_{selected_job[1].replace(' ', '_')}.txt",
-                                mime="text/plain",
-                                use_container_width=True
-                            )
-
-                        with col_clear_letter:
-                            if st.button("🗑️ Clear Letter", use_container_width=True):
-                                # Clear only selected job and generated cover letter
-                                # Input fields remain filled
-                                st.session_state.selected_job = None
-                                success_placeholder = st.success("✅ Cover letter cleared!")
-                                time.sleep(1.5)
-                                success_placeholder.empty()
-                                st.rerun()
-
-                        # Quick success message
-                        success_placeholder = st.success("✅ Cover letter generated!")
-                        time.sleep(1.5)
-                        success_placeholder.empty()
-
+                    cover_letter = generator.generate_cover_letter(
+                        selected_job[1],  # job_title
+                        selected_job[2],  # company_name
+                        selected_job[3],  # location
+                        use_ai=st.session_state.ai_polish_enabled
+                    )
+                    st.session_state.generated_letter = cover_letter
+                    st.rerun()
                 except Exception as e:
-                    error_placeholder = st.error(f"❌ Generation failed: {str(e)}")
-                    time.sleep(2)
-                    error_placeholder.empty()
+                    st.error(f"❌ Generation failed: {str(e)}")
+                    st.info("💡 Please try again or contact support if the issue persists.")
+    
     else:
-        st.info("👆 Select a job from the left panel to generate a cover letter")
+        st.info("👆 Select a job from the left panel to automatically generate a cover letter")
         st.markdown("""
         ### How to use:
         1. **Search for jobs** using the sidebar
-        2. **Click "✍️ Generate"** next to any job
-        3. **Fill in your information** here
-        4. **Generate** your personalized cover letter
+        2. **Click "✍️ Generate Cover Letter"** next to any job
+        3. **Cover letter is generated automatically** - no personal input needed!
+        4. **Download or regenerate** as needed
         """)
 
 # Close main content wrapper
