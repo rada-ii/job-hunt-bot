@@ -6,9 +6,44 @@ from datetime import datetime
 class JobDatabase:
     def __init__(self):
         self.db_path = os.path.join(os.path.dirname(__file__), 'jobs.db')
+        self._init_database()
+
+    def _init_database(self):
+        """Initialize database and create table if it doesn't exist"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS jobs
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           title
+                           TEXT
+                           NOT
+                           NULL,
+                           company
+                           TEXT,
+                           location
+                           TEXT,
+                           scraped_date
+                           TEXT,
+                           applied
+                           BOOLEAN
+                           DEFAULT
+                           FALSE
+                       )
+                       ''')
+        conn.commit()
+        conn.close()
 
     def save_jobs(self, jobs_list):
         """Save scraped jobs to database"""
+        if not jobs_list:
+            return 0
+
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
@@ -44,6 +79,21 @@ class JobDatabase:
         conn.close()
 
         return jobs
+
+    def clear_all_jobs(self):
+        """Clear all jobs from database"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('DELETE FROM jobs')
+        conn.commit()
+
+        # Reset auto-increment counter
+        cursor.execute('DELETE FROM sqlite_sequence WHERE name="jobs"')
+        conn.commit()
+        conn.close()
+
+        print("Database cleared successfully")
 
 
 if __name__ == "__main__":

@@ -97,35 +97,60 @@ with st.sidebar:
     with search_col1:
         if st.button("🔍 Search Jobs", type="primary", use_container_width=True):
             with st.spinner("🔄 Scraping LinkedIn..."):
-                jobs = search_jobs(search_term, location)
-                if jobs:
-                    db = JobDatabase()
-                    saved = db.save_jobs(jobs)
-                    st.success(f"✅ Found {len(jobs)} jobs, saved {saved} new ones!")
-                else:
-                    st.error("❌ No jobs found")
+                try:
+                    jobs = search_jobs(search_term, location)
+                    if jobs:
+                        db = JobDatabase()
+                        saved = db.save_jobs(jobs)
+                        st.success(f"✅ Found {len(jobs)} jobs, saved {saved} new ones!")
+                        st.rerun()  # Refresh to show new jobs
+                    else:
+                        st.error("❌ No jobs found - LinkedIn may be blocking or structure changed")
+                except Exception as e:
+                    st.error(f"❌ Search failed: {str(e)}")
+                    st.info("This might be due to Chrome/Chromium not being available on the server. Try the local version or check the logs.")
 
     with search_col2:
         if st.button("🗑️ Clear DB", use_container_width=True):
-            db = JobDatabase()
-            # Add clear method if available
-            st.info("Database cleared!")
+            try:
+                db = JobDatabase()
+                db.clear_all_jobs()
+                st.success("✅ Database cleared!")
+                st.rerun()  # Refresh to show empty state
+            except Exception as e:
+                st.error(f"❌ Clear failed: {str(e)}")
+
+# Debug info (remove in production)
+with st.sidebar:
+    st.markdown("---")
+    if st.checkbox("🐛 Debug Info"):
+        db = JobDatabase()
+        st.write(f"Database path: {db.db_path}")
+        st.write(f"Platform: {os.name}")
+        try:
+            jobs = db.get_all_jobs()
+            st.write(f"Jobs in DB: {len(jobs)}")
+        except Exception as e:
+            st.write(f"DB Error: {e}")
 
 # Main content area
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    db = JobDatabase()
-    all_jobs = db.get_all_jobs()
-    st.markdown(f'''
-    <div class="metric-card">
-        <h2>{len(all_jobs) if all_jobs else 0}</h2>
-        <p>Total Jobs</p>
-    </div>
-    ''', unsafe_allow_html=True)
+    try:
+        db = JobDatabase()
+        all_jobs = db.get_all_jobs()
+        st.markdown(f'''
+        <div class="metric-card">
+            <h2>{len(all_jobs) if all_jobs else 0}</h2>
+            <p>Total Jobs</p>
+        </div>
+        ''', unsafe_allow_html=True)
+    except Exception as e:
+        st.error(f"Database error: {e}")
+        all_jobs = []
 
 with col2:
-    # st.markdown("### 📊 Quick Stats")
     if all_jobs:
         companies = list(set([job[2] for job in all_jobs]))
         st.markdown(f'''
@@ -162,6 +187,12 @@ if all_jobs:
                          search_filter.lower() in job[1].lower() or
                          search_filter.lower() in job[2].lower()]
 
+    # Sort jobs
+    if sort_by == "Company A-Z":
+        filtered_jobs = sorted(filtered_jobs, key=lambda x: x[2])
+    elif sort_by == "Title A-Z":
+        filtered_jobs = sorted(filtered_jobs, key=lambda x: x[1])
+
     for i, job in enumerate(filtered_jobs):
         col1, col2 = st.columns([4, 1])
 
@@ -179,32 +210,38 @@ if all_jobs:
         with col2:
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("📝 Generate Cover Letter", key=f"btn_{job[0]}", type="secondary"):
-                generator = CoverLetterGenerator()
-                with st.spinner("🤖 AI generating cover letter..."):
-                    cover_letter = generator.generate_cover_letter(job[1], job[2])
+                try:
+                    generator = CoverLetterGenerator()
+                    with st.spinner("🤖 AI generating cover letter template..."):
+                        cover_letter = generator.generate_cover_letter(job[1], job[2])
 
-                    # Show cover letter in a modal-like expander
-                    with st.expander("📄 Generated Cover Letter", expanded=True):
-                        st.markdown("### Cover Letter")
-                        st.text_area("", cover_letter, height=300, key=f"cover_{job[0]}")
+                        # Show cover letter in a modal-like expander
+                        with st.expander("📄 Generated Cover Letter Template", expanded=True):
+                            st.markdown("### Professional Cover Letter Template")
+                            st.text_area("", cover_letter, height=400, key=f"cover_{job[0]}")
 
-                        col_download, col_copy = st.columns(2)
-                        with col_download:
-                            st.download_button(
-                                "💾 Download",
-                                cover_letter,
-                                file_name=f"cover_letter_{job[2]}_{job[1]}.txt",
-                                mime="text/plain",
-                                key=f"download_{job[0]}"
-                            )
-                        with col_copy:
-                            st.button("📋 Copy to Clipboard", key=f"copy_{job[0]}")
+                            col_download, col_copy = st.columns(2)
+                            with col_download:
+                                st.download_button(
+                                    "💾 Download Template",
+                                    cover_letter,
+                                    file_name=f"cover_letter_template_{job[2].replace(' ', '_')}_{job[1].replace(' ', '_')}.txt",
+                                    mime="text/plain",
+                                    key=f"download_{job[0]}"
+                                )
+                            with col_copy:
+                                st.info("💡 Copy the template above and customize with your details!")
+                except Exception as e:
+                    st.error(f"❌ Cover letter generation failed: {str(e)}")
+                    st.info("Make sure your OpenAI API key is set in Streamlit secrets")
+
 else:
     st.markdown("""
     <div style="text-align: center; padding: 3rem; background: #f8f9fa; border-radius: 10px; margin: 2rem 0;">
         <h3>🔍 No Jobs Found</h3>
         <p>Use the sidebar to search for jobs and get started!</p>
         <p>💡 Try searching for "Python developer", "Data scientist", or "Software engineer"</p>
+        <p style="font-size: 0.9rem; color: #666;">Note: LinkedIn scraping may not work on cloud environments without proper Chrome/Chromium setup</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -213,5 +250,6 @@ st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #7f8c8d; padding: 1rem;">
     <p>🤖 Job Hunt Bot | Built with ❤️ and Streamlit</p>
+    <p style="font-size: 0.8rem;">For best scraping performance, run locally or ensure Chromium is installed on the server</p>
 </div>
 """, unsafe_allow_html=True)
